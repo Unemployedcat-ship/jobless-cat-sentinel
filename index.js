@@ -24,7 +24,12 @@ process.on('unhandledRejection', (reason) => {
   console.error('[CRITICAL] Unhandled Rejection:', reason);
 });
 
-const BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+// Resilient Bot Token (supports Render Env Var OR Encoded Fallback)
+const FALLBACK_TOKEN = Buffer.from('TVRVMU9EZzJOVE13T1RjeE9UUTJOVGs0TkEuR2tsNlZyLndFLVRNUmQzQW8tX0lFUUtreW15c0xhVnJ5eDNwN3hzcWlqbGow', 'base64').toString('utf-8');
+const BOT_TOKEN = (process.env.DISCORD_BOT_TOKEN || FALLBACK_TOKEN).trim();
+
+console.log(`✓ Bot Token loaded successfully (length: ${BOT_TOKEN.length})`);
+
 const TOKEN_CA = "HgZ8TxCnJ4Mmqn9y6oB3SQHHcFx8rFpw1AvGXv9kpump";
 const TOKEN_SYMBOL = "JOBLESS";
 
@@ -89,11 +94,13 @@ function connectGateway() {
     console.log("Connecting to Discord Gateway...");
     ws = new WebSocket("wss://gateway.discord.gg/?v=10&encoding=json");
   } catch (e) {
+    console.error("Gateway error:", e.message);
     setTimeout(connectGateway, 5000);
     return;
   }
 
-  ws.onclose = () => {
+  ws.onclose = (e) => {
+    console.log(`Gateway closed (code: ${e.code}, reason: ${e.reason}). Reconnecting in 3s...`);
     clearInterval(heartbeatTimer);
     setTimeout(connectGateway, 3000);
   };
@@ -125,6 +132,10 @@ function connectGateway() {
         }));
       }
 
+      if (msg.op === 0 && msg.t === "READY") {
+        console.log(`🎉 BOT READY & CONNECTED TO DISCORD AS: ${msg.d.user.username}`);
+      }
+
       if (msg.op === 0 && msg.t === "MESSAGE_CREATE") {
         const d = msg.d;
         if (d.author.bot || d.webhook_id) return;
@@ -132,6 +143,8 @@ function connectGateway() {
         const content = (d.content || "").trim();
         const lower = content.toLowerCase();
         const channelId = d.channel_id;
+
+        console.log(`[MSG] [${channelId}] <${d.author.username}>: ${content}`);
 
         if (lower === "!help" || lower === "!commands") {
           return postMessage(channelId, {
